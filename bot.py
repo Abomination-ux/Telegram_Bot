@@ -8,7 +8,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # Токен теперь берется из переменной окружения, а не прописан в коде
-TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not TOKEN:
+    raise ValueError("Токен не задан! Установите переменную TELEGRAM_BOT_TOKEN")
 START_DATE = datetime(2026, 7, 27)
 CHANNEL_ID = -1001234567890   # ЗАМЕНИТЕ на реальный ID канала
 
