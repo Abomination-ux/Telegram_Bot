@@ -37,12 +37,12 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-# Функция, которая запустит планировщик внутри асинхронного контекста бота
-async def start_scheduler():
+# Отдельная асинхронная функция для настройки планировщика
+async def setup_scheduler():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
     scheduler.start()
-    logging.info("Планировщик запущен внутри цикла событий бота.")
+    logging.info("✅ Планировщик успешно запущен в фоне!")
 
 def main():
     global application
@@ -54,14 +54,45 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
-    # 3. Запускаем планировщик через post_init
-    # Метод create_task выполнит нашу функцию, когда бот запустится
+    # 3. Запускаем Webhook
+    port = int(os.environ.get('PORT', 8443))
+    webhook_url = os.environ.get('WEBHOOK_URL')
+
+    if not webhook_url:
+        logging.error("❌ ОШИБКА: Переменная WEBHOOK_URL не найдена!")
+        return
+
+    logging.info(f"🚀 Запуск Webhook на порту {port}...")
+
+    # Сначала запускаем вебхук
     application.run_webhook(
         listen="0.0.0.0",
-        port=int(os.environ.get('PORT', 8443)),
+        port=port,
         url_path=TOKEN,
-        webhook_url=f"{os.environ.get('WEBHOOK_URL')}/{TOKEN}",
-        post_init=start_scheduler  # <--- ВОТ ЭТО ГЛАВНОЕ ИЗМЕНЕНИЕ
+        webhook_url=f"{webhook_url}/{TOKEN}"
+        # post_init мы убрали
+    )
+
+    # !!! ВАЖНО: Код после run_webhook выполнится ТОЛЬКО когда бот будет остановлен.
+    # Поэтому нам нужно запустить планировщик ДО того, как мы вызовем run_webhook,
+    # но ПРЯМО ВНУТРИ этого же процесса, чтобы он работал в фоне.
+    
+    # Создаем свой собственный небольшой цикл событий для планировщика
+    # (так как run_webhook блокирует поток выполнения)
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    # Запускаем настройку планировщика в этом цикле (это устранит ошибку no running event loop)
+    loop.run_until_complete(setup_scheduler())
+    
+    # Теперь запускаем самого бота. Он заберет управление циклом на себя.
+    # Планировщик при этом продолжит тихо работать в фоне.
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,
+        webhook_url=f"{webhook_url}/{TOKEN}"
     )
 
 if __name__ == "__main__":
