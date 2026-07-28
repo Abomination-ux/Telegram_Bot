@@ -1,4 +1,4 @@
-import os  # <-- Добавьте эту строку в самое начало
+import os
 import asyncio
 import logging
 from datetime import datetime
@@ -7,16 +7,15 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# Токен теперь берется из переменной окружения, а не прописан в коде
+# Токен берется из переменной окружения
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 if not TOKEN:
     raise ValueError("Токен не задан! Установите переменную TELEGRAM_BOT_TOKEN")
+
 START_DATE = datetime(2026, 7, 27)
 CHANNEL_ID = -1003881790405   # ЗАМЕНИТЕ на реальный ID канала
 
 logging.basicConfig(level=logging.INFO)
-application = None
-
 application = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,18 +49,43 @@ async def main():
     scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
     scheduler.start()
 
-    # Ручной запуск бота без автоматического закрытия цикла
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling()
+    # === ИЗМЕНЕНИЯ ДЛЯ RAILWAY ===
+    
+    # 1. Получаем порт, который Railway назначит автоматически (по умолчанию 8443, если не задан)
+    port = int(os.environ.get('PORT', 8443))
+    
+    # 2. Получаем внешний URL вашего сервиса (надо будет добавить его в переменные на Railway!)
+    webhook_url = os.environ.get('WEBHOOK_URL')
+    if not webhook_url:
+        logging.error("КРИТИЧЕСКАЯ ОШИБКА: Не задана переменная окружения WEBHOOK_URL!")
+        logging.error("Бот не сможет запуститься. Добавьте её в Railway.")
+        return
 
-    # Держим бота активным (бесконечный цикл)
-    print("✅ Бот запущен! Нажмите Ctrl+C для остановки.")
+    # 3. Запускаем Webhook вместо Polling
+    # listen="0.0.0.0" — обязательно для облачных серверов, чтобы принимать запросы извне
+    await application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,  # Используем токен как часть пути для безопасности
+        webhook_url=f"{webhook_url}/{TOKEN}" # Сообщаем Telegram точный адрес
+    )
+    
+    # === КОНЕЦ ИЗМЕНЕНИЙ ===
+
+    # Держим бота активным (бесконечный цикл) - при webhook это работает корректно без конфликтов
+    print(f"✅ Бот запущен на Webhook! Порт: {port}")
+    print("Нажмите Ctrl+C для остановки.")
+    
     try:
-        while True:
-            await asyncio.sleep(1)
+        # При webhook бот сам держит соединение, while True с asyncio.sleep(1) больше не нужен.
+        # Но можно оставить, если хотите, чтобы бот не завершался при ошибках webhook.
+        # run_webhook уже является блокирующим вызовом (он держит программу запущенной).
+        # Если мы дошли до этого места, значит run_webhook завершился (например, при Ctrl+C).
+        pass 
     except KeyboardInterrupt:
-        await application.updater.stop()
+        # В новых версиях python-telegram-bot при использовании run_webhook 
+        # останавливать приложение вручную через try/except часто не требуется, 
+        # но оставлю для страховки, если вы используете старую логику запуска.
         await application.stop()
         await application.shutdown()
 
