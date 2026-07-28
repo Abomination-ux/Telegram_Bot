@@ -12,7 +12,7 @@ if not TOKEN:
     raise ValueError("Токен не задан! Установите переменную TELEGRAM_BOT_TOKEN")
 
 START_DATE = datetime(2026, 7, 27)
-CHANNEL_ID = -1003881790405
+CHANNEL_ID = -1003881790405  # Убедитесь, что это верный ID канала!
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,39 +38,53 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-async def setup_scheduler():
-    scheduler = AsyncIOScheduler()
-    # ЗДЕСЬ ИСПРАВЛЕНО ВРЕМЯ (13:00 вместо 10:00)
-    scheduler.add_job(daily_notification, CronTrigger(hour=13, minute=0)) 
-    scheduler.start()
-    logging.info("✅ Планировщик успешно запущен в фоне!")
-
-def main():
+async def main():
     global application
     
+    # 1. Создаем приложение
     application = Application.builder().token(TOKEN).build()
+    
+    # 2. Хендлеры
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
+    # 3. Запускаем планировщик (он работает в фоне, используя тот же цикл событий)
+    scheduler = AsyncIOScheduler()
+    # Если вы в Москве, поставьте hour=10, UTC+3 даст 13:00. 
+    # Сейчас стоит 10:00 по UTC.
+    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
+    scheduler.start()
+    logging.info("✅ Планировщик запущен.")
+
+    # 4. Настройки для Webhook
     port = int(os.environ.get('PORT', 8443))
     webhook_url = os.environ.get('WEBHOOK_URL')
-
+    
     if not webhook_url:
         logging.error("❌ ОШИБКА: Переменная WEBHOOK_URL не найдена!")
         return
 
     logging.info(f"🚀 Запуск Webhook на порту {port}...")
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(setup_scheduler())
-    
-    application.run_webhook(
+    # 5. Запускаем бота. 
+    # ВАЖНО: В версии 20.x python-telegram-bot мы используем await, и запускаем через asyncio.run()
+    await application.initialize()
+    await application.start()
+    await application.updater.start_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path="secret_path_for_webhook", # ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ
-        webhook_url=f"{webhook_url}/secret_path_for_webhook" # ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ
+        url_path=TOKEN,
+        webhook_url=f"{webhook_url}/{TOKEN}"
     )
+    
+    logging.info("✅ Бот начал слушать сообщения.")
+    
+    # Бесконечное ожидание, чтобы бот не выключился
+    stop_signal = asyncio.Future()
+    await stop_signal
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен.")
