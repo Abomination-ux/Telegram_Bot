@@ -12,7 +12,7 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 if not TOKEN:
     raise ValueError("Токен не задан! Установите переменную TELEGRAM_BOT_TOKEN")
 START_DATE = datetime(2026, 7, 27)
-CHANNEL_ID = -1001234567890   # ЗАМЕНИТЕ на реальный ID канала
+CHANNEL_ID = -1003881790405   # ЗАМЕНИТЕ на реальный ID канала
 
 logging.basicConfig(level=logging.INFO)
 application = None
