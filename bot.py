@@ -69,7 +69,7 @@ async def main():
     # 5. Запускаем бота. 
     # ВАЖНО: В версии 20.x python-telegram-bot мы используем await, и запускаем через asyncio.run()
     await application.initialize()
-    await application.start()
+    await application.run_polling()
     await application.updater.start_webhook(
     listen="0.0.0.0",
     port=port,
