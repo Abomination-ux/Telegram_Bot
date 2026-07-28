@@ -60,7 +60,7 @@ async def main():
     scheduler = AsyncIOScheduler()
     # Если вы в Москве, и хотите отчет в 10:00, ставьте hour=7. 
     # Сейчас стоит 10:00 по UTC (Гринвичу).
-    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
+    scheduler.add_job(daily_notification, CronTrigger(hour=7, minute=0))
     scheduler.start()
     logging.info("✅ Планировщик успешно запущен в фоне!")
 
