@@ -38,10 +38,10 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-# Функция настройки планировщика
 async def setup_scheduler():
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
+    # ЗДЕСЬ ИСПРАВЛЕНО ВРЕМЯ (13:00 вместо 10:00)
+    scheduler.add_job(daily_notification, CronTrigger(hour=13, minute=0)) 
     scheduler.start()
     logging.info("✅ Планировщик успешно запущен в фоне!")
 
@@ -61,17 +61,15 @@ def main():
 
     logging.info(f"🚀 Запуск Webhook на порту {port}...")
 
-    # 1. Запускаем планировщик в отдельном цикле (чтобы избежать ошибок event loop)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(setup_scheduler())
     
-    # 2. Запускаем Webhook (ТОЛЬКО ОДИН РАЗ)
     application.run_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path=TOKEN,
-        webhook_url=f"{webhook_url}/{TOKEN}"
+        url_path="secret_path_for_webhook", # ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ
+        webhook_url=f"{webhook_url}/secret_path_for_webhook" # ИСПРАВЛЕНИЕ БЕЗОПАСНОСТИ
     )
 
 if __name__ == "__main__":
