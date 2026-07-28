@@ -1,5 +1,4 @@
 import os
-import asyncio
 import logging
 from datetime import datetime
 from telegram import Update
@@ -16,7 +15,9 @@ CHANNEL_ID = -1003881790405  # Убедитесь, что это верный ID
 
 logging.basicConfig(level=logging.INFO)
 
+# Глобальная переменная для бота и планировщика
 application = None
+scheduler = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -38,53 +39,32 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-async def main():
+# Эта функция запустится вместе с ботом, используя его цикл событий
+async def initialize_scheduler():
+    global scheduler
+    scheduler = AsyncIOScheduler()
+    # Поставьте нужный час (UTC). Для Москвы (UTC+3), чтобы было 10:00, ставьте hour=7
+    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
+    scheduler.start()
+    logging.info("✅ Планировщик успешно запущен в фоне!")
+
+def main():
     global application
     
+    logging.info("🚀 Запуск бота через Polling...")
+
     # 1. Создаем приложение
     application = Application.builder().token(TOKEN).build()
     
-    # 2. Хендлеры
+    # 2. Добавляем хендлеры
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
-    # 3. Запускаем планировщик (он работает в фоне, используя тот же цикл событий)
-    scheduler = AsyncIOScheduler()
-    # Если вы в Москве, поставьте hour=10, UTC+3 даст 13:00. 
-    # Сейчас стоит 10:00 по UTC.
-    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
-    scheduler.start()
-    logging.info("✅ Планировщик запущен.")
-
-    # 4. Настройки для Webhook
-    port = int(os.environ.get('PORT', 8443))
-    webhook_url = os.environ.get('WEBHOOK_URL')
-    
-    if not webhook_url:
-        logging.error("❌ ОШИБКА: Переменная WEBHOOK_URL не найдена!")
-        return
-
-    logging.info(f"🚀 Запуск Webhook на порту {port}...")
-
-    # 5. Запускаем бота. 
-    # ВАЖНО: В версии 20.x python-telegram-bot мы используем await, и запускаем через asyncio.run()
-    await application.initialize()
-    await application.run_polling()
-    await application.updater.start_webhook(
-    listen="0.0.0.0",
-    port=port,
-    url_path=TOKEN,
-    webhook_url=f"{webhook_url}"  # Больше не приклеиваем токен в конце
-)
-    
-    logging.info("✅ Бот начал слушать сообщения.")
-    
-    # Бесконечное ожидание, чтобы бот не выключился
-    stop_signal = asyncio.Future()
-    await stop_signal
+    # 3. Запускаем планировщик используя post_init
+    # Это скажет библиотеке: "Как только запустишь свой цикл, вызови initialize_scheduler"
+    application.run_polling(
+        post_init=initialize_scheduler
+    )
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("Бот остановлен.")
+    main()
