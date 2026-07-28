@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from datetime import datetime
 from telegram import Update
@@ -37,7 +38,7 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-# Отдельная асинхронная функция для настройки планировщика
+# Функция настройки планировщика
 async def setup_scheduler():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
@@ -47,14 +48,10 @@ async def setup_scheduler():
 def main():
     global application
     
-    # 1. Создаем приложение
     application = Application.builder().token(TOKEN).build()
-    
-    # 2. Добавляем хендлеры
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
-    # 3. Запускаем Webhook
     port = int(os.environ.get('PORT', 8443))
     webhook_url = os.environ.get('WEBHOOK_URL')
 
@@ -64,30 +61,12 @@ def main():
 
     logging.info(f"🚀 Запуск Webhook на порту {port}...")
 
-    # Сначала запускаем вебхук
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=TOKEN,
-        webhook_url=f"{webhook_url}/{TOKEN}"
-        # post_init мы убрали
-    )
-
-    # !!! ВАЖНО: Код после run_webhook выполнится ТОЛЬКО когда бот будет остановлен.
-    # Поэтому нам нужно запустить планировщик ДО того, как мы вызовем run_webhook,
-    # но ПРЯМО ВНУТРИ этого же процесса, чтобы он работал в фоне.
-    
-    # Создаем свой собственный небольшой цикл событий для планировщика
-    # (так как run_webhook блокирует поток выполнения)
-    import asyncio
+    # 1. Запускаем планировщик в отдельном цикле (чтобы избежать ошибок event loop)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
-    # Запускаем настройку планировщика в этом цикле (это устранит ошибку no running event loop)
     loop.run_until_complete(setup_scheduler())
     
-    # Теперь запускаем самого бота. Он заберет управление циклом на себя.
-    # Планировщик при этом продолжит тихо работать в фоне.
+    # 2. Запускаем Webhook (ТОЛЬКО ОДИН РАЗ)
     application.run_webhook(
         listen="0.0.0.0",
         port=port,
