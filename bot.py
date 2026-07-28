@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from datetime import datetime
 from telegram import Update
@@ -15,9 +16,7 @@ CHANNEL_ID = -1003881790405  # Убедитесь, что это верный ID
 
 logging.basicConfig(level=logging.INFO)
 
-# Глобальная переменная для бота и планировщика
 application = None
-scheduler = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -39,15 +38,6 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-# Эта функция запустится вместе с ботом, используя его цикл событий
-async def initialize_scheduler():
-    global scheduler
-    scheduler = AsyncIOScheduler()
-    # Поставьте нужный час (UTC). Для Москвы (UTC+3), чтобы было 10:00, ставьте hour=7
-    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
-    scheduler.start()
-    logging.info("✅ Планировщик успешно запущен в фоне!")
-
 def main():
     global application
     
@@ -60,11 +50,18 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
-    # 3. Запускаем планировщик используя post_init
-    # Это скажет библиотеке: "Как только запустишь свой цикл, вызови initialize_scheduler"
-    application.run_polling(
-        post_init=initialize_scheduler
-    )
+    # 3. ЗАПУСК ПЛАНИРОВЩИКА ПРЯМО ЗДЕСЬ
+    # Библиотека python-telegram-bot сама создаст цикл событий, как только начнет работу,
+    # поэтому apscheduler подцепится к нему автоматически.
+    scheduler = AsyncIOScheduler()
+    # Если вы в Москве (UTC+3) и хотите отправлять в 10 утра, ставьте hour=7. 
+    # Сейчас стоит 10:00 по UTC.
+    scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
+    scheduler.start()
+    logging.info("✅ Планировщик запущен в фоне!")
+
+    # 4. Запускаем бота без лишних аргументов
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
