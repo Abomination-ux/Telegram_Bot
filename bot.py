@@ -71,11 +71,11 @@ async def main():
     await application.initialize()
     await application.start()
     await application.updater.start_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=TOKEN,
-        webhook_url=f"{webhook_url}/{TOKEN}"
-    )
+    listen="0.0.0.0",
+    port=port,
+    url_path=TOKEN,
+    webhook_url=f"{webhook_url}"  # Больше не приклеиваем токен в конце
+)
     
     logging.info("✅ Бот начал слушать сообщения.")
     
