@@ -12,7 +12,7 @@ if not TOKEN:
     raise ValueError("Токен не задан! Установите переменную TELEGRAM_BOT_TOKEN")
 
 START_DATE = datetime(2026, 7, 27)
-CHANNEL_ID = -1003881790405  # Убедитесь, что это верный ID канала!
+CHANNEL_ID = -1003881790405  # Убедитесь, что ID канала верный!
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,30 +38,46 @@ async def daily_notification():
     except Exception as e:
         logging.error(f"Ошибка отправки в канал: {e}")
 
-def main():
+async def main():
     global application
     
     logging.info("🚀 Запуск бота через Polling...")
 
-    # 1. Создаем приложение
+    # 1. Создаем и настраиваем приложение
     application = Application.builder().token(TOKEN).build()
-    
-    # 2. Добавляем хендлеры
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("status", status))
 
-    # 3. ЗАПУСК ПЛАНИРОВЩИКА ПРЯМО ЗДЕСЬ
-    # Библиотека python-telegram-bot сама создаст цикл событий, как только начнет работу,
-    # поэтому apscheduler подцепится к нему автоматически.
+    # 2. Инициализируем бота (обязательный шаг перед стартом)
+    await application.initialize()
+    await application.start()
+
+    # 3. Запускаем поллинг (получение сообщений)
+    await application.updater.start_polling()
+    logging.info("✅ Бот начал слушать сообщения...")
+
+    # 4. ЗАПУСК ПЛАНИРОВЩИКА (теперь цикл событий уже работает!)
     scheduler = AsyncIOScheduler()
-    # Если вы в Москве (UTC+3) и хотите отправлять в 10 утра, ставьте hour=7. 
-    # Сейчас стоит 10:00 по UTC.
+    # Если вы в Москве, и хотите отчет в 10:00, ставьте hour=7. 
+    # Сейчас стоит 10:00 по UTC (Гринвичу).
     scheduler.add_job(daily_notification, CronTrigger(hour=10, minute=0))
     scheduler.start()
-    logging.info("✅ Планировщик запущен в фоне!")
+    logging.info("✅ Планировщик успешно запущен в фоне!")
 
-    # 4. Запускаем бота без лишних аргументов
-    application.run_polling()
+    # 5. Держим бота активным, пока не нажмут Ctrl+C
+    try:
+        # Бесконечное ожидание
+        await asyncio.Future()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Корректное завершение
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Бот остановлен.")
